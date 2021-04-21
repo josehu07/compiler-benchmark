@@ -43,7 +43,7 @@ VERSION_IX = 6
 PATH_IX = 7
 
 TIME_CMD = ['/usr/bin/time', '-v']
-SHOW_TIME_CMD_OUTPUT = True
+SHOW_TIME_CMD_OUTPUT = False
 
 home = os.path.expanduser("~")  # instead of home = os.getenv('HOME') that doesn’t work on Windows
 
@@ -86,24 +86,24 @@ def opIdOf(lang, templated, op, exec_path=None):
     return srcIdOf(lang, templated) + '-' + op + '-' + str(exec_path)
 
 
-def fill_in_speedups(results, table_titles, op_ix):
-    min_ix = None
-    min_dur = None
+# def fill_in_speedups(results, table_titles, op_ix):
+#     min_ix = None
+#     min_dur = None
 
-    for ix, result in enumerate(results):
-        if result[OP_IX] == op_ix:
-            if min_dur is None or min_dur > result[CDUR_PER_FUNC_IX]:
-                min_ix = ix
-                min_dur = result[CDUR_PER_FUNC_IX]
+#     for ix, result in enumerate(results):
+#         if result[OP_IX] == op_ix:
+#             if min_dur is None or min_dur > result[CDUR_PER_FUNC_IX]:
+#                 min_ix = ix
+#                 min_dur = result[CDUR_PER_FUNC_IX]
 
-    if min_ix is None:
-        return
+#     if min_ix is None:
+#         return
 
-    min_lang = results[min_ix][LANG_IX]
+#     min_lang = results[min_ix][LANG_IX]
 
-    for ix, result in enumerate(results):
-        if result[OP_IX] == op_ix:
-            result[CDUR_SPEEDUP_IX] = factor_str(result[CDUR_PER_FUNC_IX] / min_dur) + ' [' + min_lang + ']'
+#     for ix, result in enumerate(results):
+#         if result[OP_IX] == op_ix:
+#             result[CDUR_SPEEDUP_IX] = factor_str(result[CDUR_PER_FUNC_IX] / min_dur) + ' [' + min_lang + ']'
 
 
 def stringify_durs(results):
@@ -140,7 +140,7 @@ def to_str_in_nanoseconds(dur):
 
 
 def to_str_in_kilobytes(mem):
-    return '{:.0f}'.format(mem) if mem > 0 else 'N/A (error?)'
+    return '{:.1f}'.format(mem) if mem > 0 else 'N/A (error?)'
 
 
 def factor_str(factor):
@@ -1018,7 +1018,7 @@ def compile_file(src_paths,
                 memmsg_s = "Maximum resident set size (kbytes): "
                 memmsg_e = "\n\tAverage resident set size"
                 mem = errstr[errstr.index(memmsg_s)+len(memmsg_s):errstr.index(memmsg_e)]
-                cmems.append(int(mem))
+                cmems.append(float(mem))
     cdur_min = min(cdurs)       # compilation duration minimum
     cmem_max = max(cmems)       # compilation peak memory usage maximum
 

@@ -1,0 +1,203 @@
+#!/usr/bin/env python3
+
+import sys
+import os
+import argparse
+import subprocess as sp
+
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+
+
+DEFAULT_FCS = ','.join([str(10*i) for i in range(1, 13)])
+DEFAULT_FDS = ','.join([str(10*i) for i in range(1, 13)])
+
+FIXED_FC = 60
+FIXED_FD = 60
+
+BAR_WIDTH = 4
+
+
+def compose_benchmark_cmd(lang, fc, fd, rc):
+    return [
+        "./benchmark",
+        "--languages=%s" % lang,
+        "--function-count=%d" % fc,
+        "--function-depth=%d" % fd,
+        "--run-count=%d" % rc,
+    ]
+
+def parse_benchmark_output(outstr):
+    last_line = outstr.strip().split('\n')[-1]
+    print(last_line)
+    segs = last_line.split(" |")
+    dur_per_func = float(segs[3])
+    mem_per_func = float(segs[4])
+    ver = segs[6].strip()
+    comp = segs[7].strip()[1:-1]
+    temp = segs[2].strip()
+    return dur_per_func, mem_per_func, ver, comp, temp
+
+def call_benchmark(lang, fc, fd, rc):
+    args_ = compose_benchmark_cmd(lang, fc, fd, rc)
+    print("Calling", ' '.join(args_))
+
+    dur_per_func, mem_per_func, ver = None, None, None
+    num_funcs = fc * fd
+
+    with sp.Popen(args=args_,
+                  stdout=sp.PIPE,
+                  stderr=sp.PIPE) as bench_proc:
+        outs, errs = bench_proc.communicate()
+        # print('Compilation:', ' '.join([exe] + comp_flags + out_flag_and_exe + src_paths))
+        if bench_proc.returncode != 0:
+            print("ERROR: benchmarker returns status code %d" % bench_proc.returncode,
+                  file=sys.stderr)
+            return None
+        if outs:
+            dur_per_func, mem_per_func, ver, comp, temp = parse_benchmark_output(outs.decode('utf-8'))
+        else:
+            print("ERROR: benchmarker generates nothing to stdout",
+                  file=sys.stderr)
+            return None
+        if errs:
+            print("stderr:", errs)
+
+    return dur_per_func * num_funcs / 1000, mem_per_func * num_funcs / 1024, ver, comp, temp
+
+
+def lang_file_extension(lang):
+    if lang == 'rust':
+        return 'rs'
+    elif lang == 'julia':
+        return 'jl'
+    elif lang == 'ocaml':
+        return 'ml'
+    elif lang == 'c#':
+        return 'cs'
+    elif lang == 'vox':
+        return 'vx'
+    elif lang == 'ada':
+        return 'adb'
+    else:
+        return lang
+
+def get_code_size_kb(lang, templated):
+    llang = lang.lower()
+    code_file = os.path.join("generated", llang,
+                             "main"+('_t' if templated else '')+'.'+lang_file_extension(llang))
+    return os.path.getsize(code_file) / 1024
+
+
+def plot_results(outfile, xs, ylines, ybars, extras, xlabel, ylinelabel, ybarlabel, elabel, title):
+    print("Plotting %s and %s vs. %s..." % (ylinelabel, ybarlabel, xlabel))
+
+    fig, ax1 = plt.subplots(figsize=[8.2, 4.8])
+    line_color = "royalblue"
+    ax1.set_ylabel(ybarlabel, color=line_color)
+    ax1.set_xlim(xs[0]-5, xs[-1]+5)
+    ax1.bar(xs, ybars, width=BAR_WIDTH, color=line_color, zorder=10, label=ybarlabel)
+    ax1.tick_params(axis='x', which='both', labelbottom=False)
+    ax1.tick_params(axis='y', labelcolor=line_color)
+    
+    ax2 = ax1.twinx()
+    line_color = "darkred"
+    ax2.set_ylabel(ylinelabel, color=line_color)
+    ax2.plot(xs, ylines, color=line_color, marker='o', zorder=15, label=ylinelabel)
+    ax2.tick_params(axis='y', labelcolor=line_color)
+    
+    plt.table(cellText=[xs, extras], cellLoc='center',
+              rowLabels=[xlabel, elabel], loc='bottom', edges='open',
+              bbox=[0, -0.15, 1, 0.12])
+
+    plt.title(title)
+    plt.grid(axis='y', alpha=0.6, zorder=5)
+    fig.tight_layout()
+    
+    plt.savefig(outfile, dpi=120)
+    plt.close()
+
+
+def loop_function_counts(lang, fcs, rc, outfile):
+    cdurs, cmems, codesizes = [], [], []
+    comp_ver, comp_exec, templated = None, None, None
+
+    for fc in fcs:
+        dur, mem, ver, comp, temp = call_benchmark(lang, fc, FIXED_FD, rc);
+        cdurs.append(dur)
+        cmems.append(mem)
+        if comp_ver is None:
+            comp_ver = ver
+            comp_exec = comp
+            templated = temp
+        codesizes.append("%.1f" % get_code_size_kb(lang, True if temp == 'Yes' else False))
+    
+    plot_results(outfile, fcs, cdurs, cmems, codesizes,
+                 "function count", "compile time (ms)", "peak memory usage (MB)", "code size (KB)",
+                 "language %s, compiler %s (ver %s)\ntemplated = %s, fixed function depth = %d" \
+                    % (lang, comp_exec, comp_ver, templated, FIXED_FD))
+
+def loop_function_depths(lang, fds, rc, outfile):
+    cdurs, cmems, codesizes = [], [], []
+    comp_ver, comp_exec, templated = None, None, None
+
+    for fd in fds:
+        dur, mem, ver, comp, temp = call_benchmark(lang, FIXED_FC, fd, rc);
+        cdurs.append(dur)
+        cmems.append(mem)
+        if comp_ver is None:
+            comp_ver = ver
+            comp_exec = comp
+            templated = temp
+        codesizes.append("%.1f" % get_code_size_kb(lang, True if temp == 'Yes' else False))
+    
+    plot_results(outfile, fds, cdurs, cmems, codesizes,
+                 "function depth", "compile time (ms)", "peak memory usage (MB)", "code size (KB)",
+                 "language %s, compiler %s (ver %s)\ntemplated = %s, fixed function count = %d" \
+                    % (lang, comp_exec, comp_ver, templated, FIXED_FC))
+
+
+def main():
+    parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+
+    parser.add_argument('--language', '--lang', type=str,
+                        default='C',
+                        help='Language to do size benchmark')
+
+    parser.add_argument('--function-counts', '--fcs', type=str,
+                        default=DEFAULT_FCS,
+                        help='Values of function-counts to try')
+
+    parser.add_argument('--function-depths', '--fds', type=str,
+                        default=DEFAULT_FDS,
+                        help='Values of function-depths to try')
+
+    parser.add_argument('--run-count', '--rc', type=int,
+                        default=3,
+                        help='Number of runs for each compilation')
+
+    parser.add_argument('--png-folder', '--pngdir', type=str,
+                        default="results",
+                        help='Output folder for resul files')
+
+    parser.add_argument('--png-prefix', '--pngpre', type=str,
+                        default="sizebench",
+                        help='Output plot png filename prefix')
+
+    args = parser.parse_args()
+
+    args.function_counts = list(map(lambda x: int(x), args.function_counts.split(',')))
+    args.function_depths = list(map(lambda x: int(x), args.function_depths.split(',')))
+
+    if not os.path.isdir(args.png_folder):
+        os.mkdir(args.png_folder)
+
+    loop_function_counts(args.language, args.function_counts, args.run_count,
+                         "%s/%s_%s_fc.png" % (args.png_folder, args.png_prefix, args.language))
+    loop_function_depths(args.language, args.function_depths, args.run_count,
+                         "%s/%s_%s_fd.png" % (args.png_folder, args.png_prefix, args.language))
+
+
+if __name__ == '__main__':
+    main()
