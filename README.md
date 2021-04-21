@@ -1,4 +1,16 @@
-# compiler-benchmark
+# compiler-benchmark (Modified)
+
+Added the `sizebench` script for measuring compilation time and peak memory usage over code files with different sizes.
+
+```bash
+./sizebench --help
+```
+
+See the result plots under the `results/` folder.
+
+---
+
+# Original README Below
 
 Benchmarks compilation speeds of different combinations of languages and
 compilers. Supported languages are:

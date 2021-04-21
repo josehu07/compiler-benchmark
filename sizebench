@@ -179,7 +179,7 @@ def main():
 
     parser.add_argument('--png-folder', '--pngdir', type=str,
                         default="results",
-                        help='Output folder for resul files')
+                        help='Output folder for result files')
 
     parser.add_argument('--png-prefix', '--pngpre', type=str,
                         default="sizebench",
