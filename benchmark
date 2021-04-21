@@ -30,16 +30,20 @@ ROOT_PATH = 'generated'
 RANGE = range(5, 15)
 VERSIONS = [""] + [f"-{i}" for i in RANGE]
 
-TABLE_TITLES = ['Lang-uage', 'Oper-ation', 'Temp-lated', 'Op Time [us/#fn]', 'Slowdown vs [Best]', 'Run Time [us/#fn]', 'Version', 'Exec']
+TABLE_TITLES = ['Lang-uage', 'Oper-ation', 'Temp-lated', 'Op Time [us/#fn]', 'Peak Memory [KB/#fn]', 'Run Time [us/#fn]', 'Version', 'Exec']
 
 LANG_IX = 0
 OP_IX = 1
 TEMPLATED_IX = 2
 CDUR_PER_FUNC_IX = 3
-CDUR_SPEEDUP_IX = 4
+# CDUR_SPEEDUP_IX = 4
+CMEM_PER_FUNC_IX = 4
 RDUR_PER_FUNC_IX = 5
 VERSION_IX = 6
 PATH_IX = 7
+
+TIME_CMD = ['/usr/bin/time', '-v']
+SHOW_TIME_CMD_OUTPUT = True
 
 home = os.path.expanduser("~")  # instead of home = os.getenv('HOME') that doesn’t work on Windows
 
@@ -107,8 +111,12 @@ def stringify_durs(results):
         result[CDUR_PER_FUNC_IX] = to_str_in_microseconds(result[CDUR_PER_FUNC_IX])  # convert to string
         result[RDUR_PER_FUNC_IX] = to_str_in_nanoseconds(result[RDUR_PER_FUNC_IX])  # convert to string
 
+def stringify_mems(results):
+    for result in results:
+        result[CMEM_PER_FUNC_IX] = to_str_in_kilobytes(result[CMEM_PER_FUNC_IX])   # convert to string
 
-def row_list(args, lang, op, exec_path, exec_version, cdur, rdur, templated):
+
+def row_list(args, lang, op, exec_path, exec_version, cdur, cmem, rdur, templated):
     if exec_path.startswith(home):
         exec_path = os.path.join('~', exec_path.lstrip(home))
 
@@ -116,7 +124,7 @@ def row_list(args, lang, op, exec_path, exec_version, cdur, rdur, templated):
             op,
             'Yes' if templated else 'No',
             cdur / (args.function_count * args.function_depth),
-            None,
+            cmem / (args.function_count * args.function_depth),
             rdur / (args.function_count * args.function_depth) if rdur is not None else rdur,
             exec_version,
             '`' + os.path.basename(exec_path) + '`',
@@ -129,6 +137,10 @@ def to_str_in_microseconds(dur):
 
 def to_str_in_nanoseconds(dur):
     return '{:.0f}'.format(1e9 * dur) if dur is not None else 'N/A'
+
+
+def to_str_in_kilobytes(mem):
+    return '{:.0f}'.format(mem) if mem > 0 else 'N/A (error?)'
 
 
 def factor_str(factor):
@@ -144,9 +156,10 @@ def md_header(text, nr):        # Markdown header
 
 
 def md_table(titles, rows):
-    fill_in_speedups(rows, titles, 'Check')
-    fill_in_speedups(rows, titles, 'Build')
+    # fill_in_speedups(rows, titles, 'Check')
+    # fill_in_speedups(rows, titles, 'Build')
     stringify_durs(rows)
+    stringify_mems(rows)
 
     result = ''
 
@@ -973,9 +986,10 @@ def compile_file(src_paths,
 
     # op
     cdurs = []                  # compilation durations
+    cmems = []                  # compilation peak memory usage
     for _ in range(0, args.run_count):
         cstart = timer()        # compilation start
-        args_ = [exe] + comp_flags + out_flag_and_exe + src_paths
+        args_ = TIME_CMD + [exe] + comp_flags + out_flag_and_exe + src_paths
         # print("args:", ' '.join(args_))
         with sp.Popen(args=args_,
                       stdout=sp.PIPE,
@@ -992,12 +1006,21 @@ def compile_file(src_paths,
             if outs:
                 if not outs.startswith(b'/usr/bin/ld: warning'):
                     print('stdout:', outs)
+            else:
+                cmems.append(-1)
             if errs:
                 if lang == 'Ada':
                     errs = errs.lstrip(b'x86_64-linux-gnu-gcc-10 -c -Igenerated/ada/ -I- generated/ada/main.adb\n')
                 if len(errs) and not errs.startswith(b'/usr/bin/ld: warning'):  # skip ld warning
-                    print('output:', errs)
+                    if not errs.startswith(b'\tCommand being timed:') or SHOW_TIME_CMD_OUTPUT:
+                        print('output:', errs)
+                errstr = errs.decode('utf-8')
+                memmsg_s = "Maximum resident set size (kbytes): "
+                memmsg_e = "\n\tAverage resident set size"
+                mem = errstr[errstr.index(memmsg_s)+len(memmsg_s):errstr.index(memmsg_e)]
+                cmems.append(int(mem))
     cdur_min = min(cdurs)       # compilation duration minimum
+    cmem_max = max(cmems)       # compilation peak memory usage maximum
 
     # run
     rdur_min = None             # run duration minimum
@@ -1028,11 +1051,11 @@ def compile_file(src_paths,
         print('- {} took {:1.3f} seconds (using "{}"{})'.format(op, cdur_min, exe,
                                                                 compiler_version_str))
 
-    results.append(row_list(args, lang, op, exe, compiler_version, cdur_min, rdur_min, templated))
-    durs[opId] = cdur_min
-    print_speedup(durs,
-                  from_opId=opIdOf('D', templated, op),
-                  to_opId=opId)
+    results.append(row_list(args, lang, op, exe, compiler_version, cdur_min, cmem_max, rdur_min, templated))
+    # durs[opId] = cdur_min
+    # print_speedup(durs,
+    #               from_opId=opIdOf('D', templated, op),
+    #               to_opId=opId)
 
 
 def run_compiled_file(args, run_count=1):
