@@ -97,14 +97,16 @@ def plot_results(outfile, xs, ylines, ybars, extras, xlabel, ylinelabel, ybarlab
     line_color = "royalblue"
     ax1.set_ylabel(ybarlabel, color=line_color)
     ax1.set_xlim(xs[0]-5, xs[-1]+5)
-    ax1.bar(xs, ybars, width=BAR_WIDTH, color=line_color, zorder=10, label=ybarlabel)
+    ax1.bar(xs, ybars, width=BAR_WIDTH, color=line_color, zorder=3, label=ybarlabel)
     ax1.tick_params(axis='x', which='both', labelbottom=False)
     ax1.tick_params(axis='y', labelcolor=line_color)
+
+    plt.grid(axis='y', alpha=0.6, zorder=0)
     
     ax2 = ax1.twinx()
     line_color = "darkred"
     ax2.set_ylabel(ylinelabel, color=line_color)
-    ax2.plot(xs, ylines, color=line_color, marker='o', zorder=15, label=ylinelabel)
+    ax2.plot(xs, ylines, color=line_color, marker='o', zorder=6, label=ylinelabel)
     ax2.tick_params(axis='y', labelcolor=line_color)
     
     plt.table(cellText=[xs, extras], cellLoc='center',
@@ -112,7 +114,7 @@ def plot_results(outfile, xs, ylines, ybars, extras, xlabel, ylinelabel, ybarlab
               bbox=[0, -0.15, 1, 0.12])
 
     plt.title(title)
-    plt.grid(axis='y', alpha=0.6, zorder=5)
+
     fig.tight_layout()
     
     plt.savefig(outfile, dpi=120)
