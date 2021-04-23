@@ -1,12 +1,16 @@
 # compiler-benchmark (Modified)
 
-Added the `sizebench` script for measuring compilation time and peak memory usage over code files with different sizes.
+Changed the `benchmark` script to also measure peak memory usage.
+
+Added a few scripts alongside the original `benchmark` script:
+
+- `sizebench`: for measuring compilation time and peak memory usage over code files with different sizes
+- `generator`: stripped off the code generation part of `benchmark` and added multiple files mode for C/C++
 
 ```bash
-./sizebench --help
+$ ./sizebench --help
+$ ./generator --help
 ```
-
-See the result plots under the `results/` folder.
 
 ---
 

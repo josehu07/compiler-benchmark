@@ -989,7 +989,7 @@ def compile_file(src_paths,
     cmems = []                  # compilation peak memory usage
     for _ in range(0, args.run_count):
         cstart = timer()        # compilation start
-        comp_flags += ["-O3"]
+        # comp_flags += ["-O3"]
         args_ = TIME_CMD + [exe] + comp_flags + out_flag_and_exe + src_paths
         with sp.Popen(args=args_,
                       stdout=sp.PIPE,
