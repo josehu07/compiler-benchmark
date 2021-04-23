@@ -11,7 +11,8 @@ import matplotlib.pyplot as plt
 
 
 DEFAULT_FCS = ','.join([str(10*i) for i in range(1, 13)])
-DEFAULT_FDS = ','.join([str(10*i) for i in range(1, 13)])
+DEFAULT_FDS = "60"
+# DEFAULT_FDS = ','.join([str(10*i) for i in range(1, 13)])
 
 FIXED_FC = 60
 FIXED_FD = 60
@@ -23,6 +24,7 @@ def compose_benchmark_cmd(lang, fc, fd, rc):
     return [
         "./benchmark",
         "--languages=%s" % lang,
+        "--operations=Build",
         "--function-count=%d" % fc,
         "--function-depth=%d" % fd,
         "--run-count=%d" % rc,
@@ -121,12 +123,16 @@ def plot_results(outfile, xs, ylines, ybars, extras, xlabel, ylinelabel, ybarlab
     plt.close()
 
 
-def loop_function_counts(lang, fcs, rc, outfile):
+###
+# Run benchmark, backup in text file, and plot.
+###
+
+def loop_function_counts(lang, fcs, fixed_fd, rc, textfile, pngfile):
     cdurs, cmems, codesizes = [], [], []
     comp_ver, comp_exec, templated = None, None, None
 
     for fc in fcs:
-        dur, mem, ver, comp, temp = call_benchmark(lang, fc, FIXED_FD, rc);
+        dur, mem, ver, comp, temp = call_benchmark(lang, fc, fixed_fd, rc);
         cdurs.append(dur)
         cmems.append(mem)
         if comp_ver is None:
@@ -134,18 +140,24 @@ def loop_function_counts(lang, fcs, rc, outfile):
             comp_exec = comp
             templated = temp
         codesizes.append("%.1f" % get_code_size_kb(lang, True if temp == 'Yes' else False))
+
+    with open(textfile, 'w+') as tfile:
+        tfile.write("Expr: function_counts\n")
+        tfile.write("%s | %s | %s | %s | %d\n" % (lang, comp_exec, comp_ver, templated, fixed_fd))
+        for i in range(len(fcs)):
+            tfile.write("%d , %f , %f , %s\n" % (fcs[i], cdurs[i], cmems[i], codesizes[i]))
     
-    plot_results(outfile, fcs, cdurs, cmems, codesizes,
+    plot_results(pngfile, fcs, cdurs, cmems, codesizes,
                  "function count", "compile time (ms)", "peak memory usage (MB)", "code size (KB)",
                  "language %s, compiler %s (ver %s)\ntemplated = %s, fixed function depth = %d" \
-                    % (lang, comp_exec, comp_ver, templated, FIXED_FD))
+                    % (lang, comp_exec, comp_ver, templated, fixed_fd))
 
-def loop_function_depths(lang, fds, rc, outfile):
+def loop_function_depths(lang, fds, fixed_fc, rc, textfile, pngfile):
     cdurs, cmems, codesizes = [], [], []
     comp_ver, comp_exec, templated = None, None, None
 
     for fd in fds:
-        dur, mem, ver, comp, temp = call_benchmark(lang, FIXED_FC, fd, rc);
+        dur, mem, ver, comp, temp = call_benchmark(lang, fixed_fc, fd, rc);
         cdurs.append(dur)
         cmems.append(mem)
         if comp_ver is None:
@@ -153,11 +165,84 @@ def loop_function_depths(lang, fds, rc, outfile):
             comp_exec = comp
             templated = temp
         codesizes.append("%.1f" % get_code_size_kb(lang, True if temp == 'Yes' else False))
+
+    with open(textfile, 'w+') as tfile:
+        tfile.write("Expr: function_depths\n")
+        tfile.write("%s | %s | %s | %s | %d\n" % (lang, comp_exec, comp_ver, templated, fixed_fc))
+        for i in range(len(fds)):
+            tfile.write("%d , %f , %f , %s\n" % (fds[i], cdurs[i], cmems[i], codesizes[i]))
     
-    plot_results(outfile, fds, cdurs, cmems, codesizes,
+    plot_results(pngfile, fds, cdurs, cmems, codesizes,
                  "function depth", "compile time (ms)", "peak memory usage (MB)", "code size (KB)",
                  "language %s, compiler %s (ver %s)\ntemplated = %s, fixed function count = %d" \
-                    % (lang, comp_exec, comp_ver, templated, FIXED_FC))
+                    % (lang, comp_exec, comp_ver, templated, fixed_fc))
+
+
+###
+# Plot from existing text files.
+###
+
+def plot_function_counts(lang, textfile, pngfile):
+    filename_lang = textfile.split('_')[1]
+    infile_lang = None
+    fcs, cdurs, cmems, codesizes = [], [], [], []
+    comp_ver, comp_exec, templated, fixed_fd = None, None, None, None
+
+    with open(textfile, 'r') as tfile:
+        expr_line = tfile.readline().strip()
+        assert expr_line[6:] == "function_counts"
+
+        meta_line = tfile.readline().strip()
+        meta_segs = meta_line.split(" | ")
+        infile_lang = meta_segs[0]
+        comp_exec = meta_segs[1]
+        comp_ver = meta_segs[2]
+        templated = meta_segs[3]
+        fixed_fd = int(meta_segs[4])
+        assert infile_lang == filename_lang and infile_lang == lang
+
+        for line in tfile.readlines():
+            segs = line.strip().split(" , ")
+            fcs.append(int(segs[0]))
+            cdurs.append(float(segs[1]))
+            cmems.append(float(segs[2]))
+            codesizes.append(float(segs[3]))
+
+    plot_results(pngfile, fcs, cdurs, cmems, codesizes,
+                 "function count", "compile time (ms)", "peak memory usage (MB)", "code size (KB)",
+                 "language %s, compiler %s (ver %s)\ntemplated = %s, fixed function depth = %d" \
+                    % (lang, comp_exec, comp_ver, templated, fixed_fd))
+
+def plot_function_depths(lang, textfile, pngfile):
+    filename_lang = textfile.split('_')[1]
+    infile_lang = None
+    fds, cdurs, cmems, codesizes = [], [], [], []
+    comp_ver, comp_exec, templated, fixed_fc = None, None, None, None
+
+    with open(textfile, 'r') as tfile:
+        expr_line = tfile.readline().strip()
+        assert expr_line[6:] == "function_depths"
+
+        meta_line = tfile.readline().strip()
+        meta_segs = meta_line.split(" | ")
+        infile_lang = meta_segs[0]
+        comp_exec = meta_segs[1]
+        comp_ver = meta_segs[2]
+        templated = meta_segs[3]
+        fixed_fc = int(meta_segs[4])
+        assert infile_lang == filename_lang and infile_lang == lang
+
+        for line in tfile.readlines():
+            segs = line.strip().split(" , ")
+            fds.append(int(segs[0]))
+            cdurs.append(float(segs[1]))
+            cmems.append(float(segs[2]))
+            codesizes.append(float(segs[3]))
+
+    plot_results(pngfile, fds, cdurs, cmems, codesizes,
+                 "function depth", "compile time (ms)", "peak memory usage (MB)", "code size (KB)",
+                 "language %s, compiler %s (ver %s)\ntemplated = %s, fixed function count = %d" \
+                    % (lang, comp_exec, comp_ver, templated, fixed_fc))
 
 
 def main():
@@ -187,6 +272,10 @@ def main():
                         default="sizebench",
                         help='Output plot png filename prefix')
 
+    parser.add_argument('--plot-from-text', '--plot', type=str,
+                        default="NOTSET",
+                        help='Plot from an existing text file')
+
     args = parser.parse_args()
 
     args.function_counts = list(map(lambda x: int(x), args.function_counts.split(',')))
@@ -195,10 +284,44 @@ def main():
     if not os.path.isdir(args.png_folder):
         os.mkdir(args.png_folder)
 
-    loop_function_counts(args.language, args.function_counts, args.run_count,
-                         "%s/%s_%s_fc.png" % (args.png_folder, args.png_prefix, args.language))
-    loop_function_depths(args.language, args.function_depths, args.run_count,
-                         "%s/%s_%s_fd.png" % (args.png_folder, args.png_prefix, args.language))
+    to_loop_fcs, to_loop_fds = False, False
+
+    if len(args.function_counts) > 1:
+        to_loop_fcs = True
+    elif len(args.function_counts) == 1:
+        FIXED_FC = args.function_counts[0]
+    else:
+        print("Error: must have function_count(s)", file=sys.stderr)
+        exit(1)
+
+    if len(args.function_depths) > 1:
+        to_loop_fds = True
+    elif len(args.function_depths) == 1:
+        FIXED_FD = args.function_depths[0]
+    else:
+        print("Error: must have function_depth(s)", file=sys.stderr)
+        exit(1)
+
+    if args.plot_from_text == "NOTSET":
+        if to_loop_fcs:
+            loop_function_counts(args.language, args.function_counts, FIXED_FD, args.run_count,
+                                 "%s/%s_%s_fc.txt" % (args.png_folder, args.png_prefix, args.language),
+                                 "%s/%s_%s_fc.png" % (args.png_folder, args.png_prefix, args.language))
+        if to_loop_fds:
+            loop_function_depths(args.language, args.function_depths, FIXED_FC, args.run_count,
+                                 "%s/%s_%s_fd.txt" % (args.png_folder, args.png_prefix, args.language),
+                                 "%s/%s_%s_fd.png" % (args.png_folder, args.png_prefix, args.language))
+    else:
+        textfile = args.plot_from_text
+        if not os.path.isfile(textfile):
+            print("Error: text file %s does not exist" % textfile, file=sys.stderr)
+            exit(1)
+        if textfile.endswith("_fc.txt"):
+            plot_function_counts(args.language, textfile,
+                                 "%s/%s_%s_fc.png" % (args.png_folder, args.png_prefix, args.language))
+        else:
+            plot_function_depths(args.language, textfile,
+                                 "%s/%s_%s_fd.png" % (args.png_folder, args.png_prefix, args.language))
 
 
 if __name__ == '__main__':
