@@ -395,9 +395,8 @@ def generate_multifile_function_definition_set(lang, types, args, f, idx, templa
 def generate_multifile_function_declaration_set(lang, types, args, f, templated):
     for typ in types:
         for findex in range(0, args.function_count):
-            for fheight in range(0, args.function_depth):
-                generate_test_function_declaration(args, lang, typ, findex, fheight, f,
-                                                   templated=templated)
+            generate_test_function_declaration(args, lang, typ, findex, args.function_depth-1, f,
+                                               templated=templated)
             f.write('\n')
         f.write('\n')
 
