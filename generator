@@ -383,9 +383,11 @@ def generate_main_test_function_definition_set(lang, types, args, f,
 
 
 def generate_multifile_function_definition_set(lang, types, args, f, idx, templated):
-    lib_function_count = int(args.function_count / args.multiple_files)
+    lib_function_count = int(args.function_count // args.multiple_files)
     for typ in types:
-        for findex in range(idx * lib_function_count, (idx+1) * lib_function_count):
+        range_start = idx * lib_function_count
+        range_end = (idx+1) * lib_function_count if (idx+1) != args.multiple_files else args.function_count
+        for findex in range(range_start, range_end):
             for fheight in range(0, args.function_depth):
                 generate_test_function_definition(args, lang, typ, findex, fheight, f,
                                                   templated=templated)
@@ -899,9 +901,6 @@ def main():
     if args.multiple_files == 0:
         generate_code_singufile(args=args)
     elif args.multiple_files > 0:
-        if args.function_count % args.multiple_files != 0:
-            print("Error: function_count must be a multiple of num of lib files", file=sys.stderr)
-            exit(1)
         generate_code_multifile(args=args)
         generate_makefile(args=args)
     else:
